@@ -1,4 +1,4 @@
-// Carlos Pineda G. 2025
+
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Azure.Functions.Worker;
