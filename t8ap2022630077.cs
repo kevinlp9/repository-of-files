@@ -23,6 +23,15 @@ namespace t8vs2022630077
         public DateTime fecha_registro { get; set; }
     }
 
+        public class Comentario
+    {
+        public string nombre { get; set; } = "Anónimo";
+        public int calificacion { get; set; }
+        public string comentario { get; set; } = "";
+        public DateTime fecha { get; set; } = DateTime.Now;
+    }
+
+
     public class AltaArchivoRequest
     {
         public string nombre_archivo { get; set; } = "";
@@ -164,6 +173,83 @@ namespace t8vs2022630077
             }
         }
     }
+
+    public static class GuardarComentario
+{
+    [Function("guardar_comentario")]
+    public static async Task<IActionResult> Run(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequest req,
+        FunctionContext executionContext)
+    {
+        try
+        {
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            var input = JsonSerializer.Deserialize<Comentario>(body);
+
+            if (input == null || input.calificacion < 1 || input.calificacion > 5 || string.IsNullOrWhiteSpace(input.comentario))
+                return new BadRequestObjectResult(new { mensaje = "Datos inválidos." });
+
+            using var connection = new MySqlConnection(Utils.GetConnectionString());
+            await connection.OpenAsync();
+
+            string query = @"INSERT INTO comentarios (nombre, calificacion, comentario, fecha) 
+                             VALUES (@n, @c, @cm, @f)";
+            using var cmd = new MySqlCommand(query, connection);
+            cmd.Parameters.AddWithValue("@n", input.nombre);
+            cmd.Parameters.AddWithValue("@c", input.calificacion);
+            cmd.Parameters.AddWithValue("@cm", input.comentario);
+            cmd.Parameters.AddWithValue("@f", input.fecha);
+
+            await cmd.ExecuteNonQueryAsync();
+
+            return new OkObjectResult(new { mensaje = "Comentario guardado exitosamente" });
+        }
+        catch (Exception ex)
+        {
+            return new BadRequestObjectResult(new { mensaje = "Error interno: " + ex.Message });
+        }
+    }
+}
+
+
+    public static class ObtenerComentarios
+{
+    [Function("get_comentarios")]
+    public static async Task<IActionResult> Run(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequest req,
+        FunctionContext executionContext)
+    {
+        try
+        {
+            using var connection = new MySqlConnection(Utils.GetConnectionString());
+            await connection.OpenAsync();
+
+            string query = "SELECT nombre, calificacion, comentario, fecha FROM comentarios ORDER BY fecha DESC";
+            using var cmd = new MySqlCommand(query, connection);
+            using var reader = await cmd.ExecuteReaderAsync();
+
+            var lista = new List<Comentario>();
+
+            while (await reader.ReadAsync())
+            {
+                lista.Add(new Comentario
+                {
+                    nombre = reader.GetString("nombre"),
+                    calificacion = reader.GetInt32("calificacion"),
+                    comentario = reader.GetString("comentario"),
+                    fecha = reader.GetDateTime("fecha")
+                });
+            }
+
+            return new OkObjectResult(lista);
+        }
+        catch (Exception ex)
+        {
+            return new BadRequestObjectResult(new { mensaje = "Error interno: " + ex.Message });
+        }
+    }
+}
+
 
     // Registro de nuevo archivo (admin)
     public static class UploadArchivo
